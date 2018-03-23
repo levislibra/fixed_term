@@ -32,8 +32,10 @@
               <group>
                 <field name="date" attrs="{'readonly': [('state', '!=', 'borrador')]}"/>
                 <field name="partner_id" options="{'no_quick_create':True,'no_create_edit':True}" domain="[('supplier', '=', True)]" attrs="{'readonly': [('state', '!=', 'borrador')]}"/>
-                <field name="account_id" attrs="{'readonly': [('state', '!=', 'borrador')]}"/>
-                <field name="amount_balance_account"/>
+                <field name="property_account_receivable_id" invisible="1"/>
+                <field name="property_account_payable_id" invisible="1"/>
+                <field name="account_id" options="{'no_quick_create':True,'no_create_edit':True}" domain="['|', ('id', '=', property_account_receivable_id), ('id', '=', property_account_payable_id)]" attrs="{'readonly': [('state', '!=', 'borrador')]}"/>
+                <field name="amount_balance_account" readonly="1"/>
                 <field name="amount" attrs="{'readonly': [('state', '!=', 'borrador')]}"/>
               </group>
               <group>
@@ -48,15 +50,19 @@
               <page string="Vencimientos">
                 <field name="line_ids" attrs="{'readonly': [('state', 'in', ('finalizado', 'cancelado'))]}">
                   <tree editable="1">
-                    <field name="date"/>
-                    <field name="theoretical_amount"/>
-                    <field name="amount"/>
-                    <field name="date_maturity"/>
-                    <field name="days" sum="Total"/>
-                    <field name="rate_type"/>
-                    <field name="rate_periodic"/>
-                    <field name="rate_per_day"/>
+                    <field name="date" attrs="{'readonly': [('state', 'in', ('finalizado', 'cancelado'))]}"/>
+                    <field name="theoretical_amount" attrs="{'readonly': [('state', 'in', ('finalizado', 'cancelado'))]}"/>
+                    <field name="amount" attrs="{'readonly': [('state', 'in', ('finalizado', 'cancelado'))]}"/>
+                    <field name="date_maturity" attrs="{'readonly': [('state', 'in', ('finalizado', 'cancelado'))]}"/>
+                    <field name="days" sum="Total"  attrs="{'readonly': [('state', 'in', ('finalizado', 'cancelado'))]}"/>
+                    <field name="rate_type" attrs="{'readonly': [('state', 'in', ('finalizado', 'cancelado'))]}"/>
+                    <field name="rate_periodic" attrs="{'readonly': [('state', 'in', ('finalizado', 'cancelado'))], 'invisible': [('rate_type', '=', 'dia')], 'required': [('rate_type', '=', 'periodo')]}"/>
+                    <field name="rate_per_day" attrs="{'readonly': [('state', 'in', ('finalizado', 'cancelado'))], 'invisible': [('rate_type', '=', 'periodo')], 'required': [('rate_type', '=', 'dia')]}"/>
                     <field name="interest_amount" sum="Total"/>
+                    <field name="id" invisible="1"/>
+                    <button name="confirmar" class="oe_highlight" string="Confirmar" states="borrador" type="object" />
+                    <button name="%(fixed_term.fixed_term_line_recalculate_wizard_view)d" class="oe_highlight" string="Recalcular" states="borrador" type="object" context="{'active_id': id}" />
+                    <button name="cancel" string="Cancelar" states="borrador" type="object" />
                     <field name="state"/>
                   </tree>
                 </field>
@@ -74,23 +80,38 @@
       <field name="name">Plazo Fijo</field>
       <field name="res_model">fixed.term</field>
       <field name="view_mode">tree,form</field>
+      <field name="view_id" ref="fixed_term_list"/>
     </record>
 
-    <!-- server action to the one above -->
-    <!--
-    <record model="ir.actions.server" id="fixed_term.action_server">
-      <field name="name">FixedTerm server</field>
-      <field name="model_id" ref="model_fixed_term_fixed_term"/>
-      <field name="code">
-        action = {
-          "type": "ir.actions.act_window",
-          "view_mode": "tree,form",
-          "res_model": self._name,
-        }
+    <!-- Vencimientos views -->
+    
+    <record model="ir.ui.view" id="fixed_term_line_list">
+      <field name="name">FixedTermLine list</field>
+      <field name="model">fixed.term.line</field>
+      <field name="arch" type="xml">
+        <tree editable="0">
+          <field name="date" attrs="{'readonly': [('state', 'in', ('finalizado', 'cancelado'))]}"/>
+          <field name="theoretical_amount" attrs="{'readonly': [('state', 'in', ('finalizado', 'cancelado'))]}"/>
+          <field name="amount" attrs="{'readonly': [('state', 'in', ('finalizado', 'cancelado'))]}"/>
+          <field name="date_maturity" attrs="{'readonly': [('state', 'in', ('finalizado', 'cancelado'))]}"/>
+          <field name="days" sum="Total"  attrs="{'readonly': [('state', 'in', ('finalizado', 'cancelado'))]}"/>
+          <field name="rate_type" attrs="{'readonly': [('state', 'in', ('finalizado', 'cancelado'))]}"/>
+          <field name="rate_periodic" attrs="{'readonly': [('state', 'in', ('finalizado', 'cancelado'))], 'invisible': [('rate_type', '=', 'dia')], 'required': [('rate_type', '=', 'periodo')]}"/>
+          <field name="rate_per_day" attrs="{'readonly': [('state', 'in', ('finalizado', 'cancelado'))], 'invisible': [('rate_type', '=', 'periodo')], 'required': [('rate_type', '=', 'dia')]}"/>
+          <field name="interest_amount" sum="Total"/>
+          <field name="state"/>
+        </tree>
       </field>
     </record>
-    -->
 
+    <!-- actions opening views on models -->
+    
+    <record model="ir.actions.act_window" id="fixed_term_line_list_action">
+      <field name="name">Vencimientos</field>
+      <field name="res_model">fixed.term.line</field>
+      <field name="view_mode">form,tree</field>
+      <field name="view_id" ref="fixed_term_line_list"/>
+    </record>
     <!-- Top menu item -->
     <menuitem name="Plazos Fijos" id="fixedterm"/>
 
@@ -99,9 +120,7 @@
     <menuitem name="Configuracion" id="fixed_term_configuracion_menu" parent="fixedterm"/>
     <!-- actions -->
     
-    <menuitem name="Plazos Fijos" id="fixed_term_list_menu_action" parent="fixed_term_list_menu"
-              action="fixed_term_list_action"/>
-    <menuitem name="Vencimientos" id="fixed_term_vencimientos_menu_action" parent="fixed_term_list_menu"
-              action="fixed_term_list_action"/>
+    <menuitem name="Plazos Fijos" id="fixed_term_list_menu_action" parent="fixed_term_list_menu" action="fixed_term_list_action"/>
+    <menuitem name="Vencimientos" id="fixed_term_vencimientos_menu_action" parent="fixed_term_list_menu" action="fixed_term_line_list_action"/>
   </data>
 </openerp>

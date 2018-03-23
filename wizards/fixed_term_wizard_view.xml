@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<odoo>
+
+    <act_window id="fixed_term_line_wizard_action" name="Recaclular" res_model="fixed.term.line.wizard" src_model="fixed.term.line" view_mode="form" context="{'active_id': id}" target="new"/>
+    
+    <record id="fixed_term_line_recalculate_wizard_view" model="ir.ui.view">
+        <field name="name">Recalcular</field>
+        <field name="model">fixed.term.line.wizard</field>
+        <field name="arch" type="xml">
+            <form>
+                <group>
+                    <field name="date_maturity"/>
+                    <field name="amount"/>
+                    <field name="days"/>
+                    <field name="rate_type"/>
+                    <field name="rate_periodic"/>
+                    <field name="rate_per_day"/>
+                    <field name="interest_amount"/>
+                </group>
+                <footer>
+                    <button name="set_student_level" string="Update Level" class="oe_right oe_highlight"
+                            type="object"/>
+                    <button string="Cancel" class="oe_right" special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+
+</odoo>
