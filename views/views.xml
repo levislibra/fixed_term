@@ -1,0 +1,107 @@
+<openerp>
+  <data>
+    <!-- explicit list view definition -->
+    
+    <record model="ir.ui.view" id="fixed_term_list">
+      <field name="name">FixedTerm list</field>
+      <field name="model">fixed.term</field>
+      <field name="arch" type="xml">
+        <tree>
+          <field name="date"/>
+          <field name="partner_id"/>
+          <field name="name"/>
+          <field name="amount"/>
+          <field name="state"/>
+        </tree>
+      </field>
+    </record>
+
+    <!-- form view Plazo Fijo -->
+
+    <record model="ir.ui.view" id="fixed_term_form">
+      <field name="name">FixedTerm form</field>
+      <field name="model">fixed.term</field>
+      <field name="arch" type="xml">
+        <form>
+          <header>
+             <button name="compute_lines" class="oe_highlight" string="Generar Plazo Fijo" states="borrador" type="object" />
+            <field name="state" widget="statusbar"/>
+          </header>
+          <sheet>
+            <group>
+              <group>
+                <field name="date" attrs="{'readonly': [('state', '!=', 'borrador')]}"/>
+                <field name="partner_id" options="{'no_quick_create':True,'no_create_edit':True}" domain="[('supplier', '=', True)]" attrs="{'readonly': [('state', '!=', 'borrador')]}"/>
+                <field name="account_id" attrs="{'readonly': [('state', '!=', 'borrador')]}"/>
+                <field name="amount_balance_account"/>
+                <field name="amount" attrs="{'readonly': [('state', '!=', 'borrador')]}"/>
+              </group>
+              <group>
+                <field name="interest_format" attrs="{'readonly': [('state', '!=', 'borrador')]}"/>
+                <field name="periodic_count" attrs="{'readonly': [('state', '!=', 'borrador')]}"/>
+                <field name="rate_type" attrs="{'readonly': [('state', '!=', 'borrador')]}"/>
+                <field name="rate_periodic" attrs="{'readonly': [('state', '!=', 'borrador')], 'invisible': [('rate_type', '=', 'dia')], 'required': [('rate_type', '=', 'periodo')]}"/>
+                <field name="rate_per_day" attrs="{'readonly': [('state', '!=', 'borrador')], 'invisible': [('rate_type', '=', 'periodo')], 'required': [('rate_type', '=', 'dia')]}"/>
+              </group>
+            </group>
+            <notebook>
+              <page string="Vencimientos">
+                <field name="line_ids" attrs="{'readonly': [('state', 'in', ('finalizado', 'cancelado'))]}">
+                  <tree editable="1">
+                    <field name="date"/>
+                    <field name="theoretical_amount"/>
+                    <field name="amount"/>
+                    <field name="date_maturity"/>
+                    <field name="days" sum="Total"/>
+                    <field name="rate_type"/>
+                    <field name="rate_periodic"/>
+                    <field name="rate_per_day"/>
+                    <field name="interest_amount" sum="Total"/>
+                    <field name="state"/>
+                  </tree>
+                </field>
+              </page>
+            </notebook>
+          </sheet>
+        </form>
+      </field>
+    </record>
+
+
+    <!-- actions opening views on models -->
+    
+    <record model="ir.actions.act_window" id="fixed_term_list_action">
+      <field name="name">Plazo Fijo</field>
+      <field name="res_model">fixed.term</field>
+      <field name="view_mode">tree,form</field>
+    </record>
+
+    <!-- server action to the one above -->
+    <!--
+    <record model="ir.actions.server" id="fixed_term.action_server">
+      <field name="name">FixedTerm server</field>
+      <field name="model_id" ref="model_fixed_term_fixed_term"/>
+      <field name="code">
+        action = {
+          "type": "ir.actions.act_window",
+          "view_mode": "tree,form",
+          "res_model": self._name,
+        }
+      </field>
+    </record>
+    -->
+
+    <!-- Top menu item -->
+    <menuitem name="Plazos Fijos" id="fixedterm"/>
+
+    <!-- menu categories -->
+    <menuitem name="Plazos Fijos" id="fixed_term_list_menu" parent="fixedterm"/>
+    <menuitem name="Configuracion" id="fixed_term_configuracion_menu" parent="fixedterm"/>
+    <!-- actions -->
+    
+    <menuitem name="Plazos Fijos" id="fixed_term_list_menu_action" parent="fixed_term_list_menu"
+              action="fixed_term_list_action"/>
+    <menuitem name="Vencimientos" id="fixed_term_vencimientos_menu_action" parent="fixed_term_list_menu"
+              action="fixed_term_list_action"/>
+  </data>
+</openerp>
