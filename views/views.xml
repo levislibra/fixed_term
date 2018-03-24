@@ -30,6 +30,7 @@
           <sheet>
             <group>
               <group>
+                <field name="id"/>
                 <field name="date" attrs="{'readonly': [('state', '!=', 'borrador')]}"/>
                 <field name="partner_id" options="{'no_quick_create':True,'no_create_edit':True}" domain="[('supplier', '=', True)]" attrs="{'readonly': [('state', '!=', 'borrador')]}"/>
                 <field name="property_account_receivable_id" invisible="1"/>
@@ -61,7 +62,7 @@
                     <field name="interest_amount" sum="Total"/>
                     <field name="id" invisible="1"/>
                     <button name="confirmar" class="oe_highlight" string="Confirmar" states="borrador" type="object" />
-                    <button name="%(fixed_term.fixed_term_line_recalculate_wizard_view)d" class="oe_highlight" string="Recalcular" states="borrador" type="object" context="{'active_id': id}" />
+                    <button name="action_confirm" class="oe_highlight" string="Recalcular" states="borrador" type="object"/>
                     <button name="cancel" string="Cancelar" states="borrador" type="object" />
                     <field name="state"/>
                   </tree>
@@ -90,6 +91,7 @@
       <field name="model">fixed.term.line</field>
       <field name="arch" type="xml">
         <tree editable="0">
+          <field name="id"/>
           <field name="date" attrs="{'readonly': [('state', 'in', ('finalizado', 'cancelado'))]}"/>
           <field name="theoretical_amount" attrs="{'readonly': [('state', 'in', ('finalizado', 'cancelado'))]}"/>
           <field name="amount" attrs="{'readonly': [('state', 'in', ('finalizado', 'cancelado'))]}"/>

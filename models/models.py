@@ -156,5 +156,29 @@ class FixedTermLine(models.Model):
 		self.compute_days()
 		# Compute interest amount
 		self.compute_interest_amount()
-		
 
+	@api.multi
+	def action_confirm(self):    
+		if True:
+			params = {
+				'fixed_term_line_id': self.id,
+				'amount': self.amount,
+				'date_maturity': self.date_maturity,
+				'days': self.days,
+				'rate_type': self.rate_type,
+				'rate_periodic': self.rate_periodic,
+				'rate_per_day': self.rate_per_day,
+				'interest_amount': self.interest_amount,
+			}
+			view_id = self.env['fixed.term.line.wizard']
+			new = view_id.create(params)
+			return {
+				'type': 'ir.actions.act_window',
+				'name': 'Recalcular interes',
+				'res_model': 'fixed.term.line.wizard',
+				'view_type': 'form',
+				'view_mode': 'form',
+				'res_id'    : new.id,
+				'view_id': self.env.ref('fixed_term.fixed_term_line_recalculate_wizard_view', False).id,
+				'target': 'new',
+			}
