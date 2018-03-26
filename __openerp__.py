@@ -26,7 +26,7 @@
         # 'security/ir.model.access.csv',
         'views/views.xml',
         'wizards/fixed_term_wizard_view.xml',
-        #'views/templates.xml',
+        'data/defaultdata.xml',
     ],
     # only loaded in demonstration mode
     'demo': [

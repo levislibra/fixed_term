@@ -10,7 +10,7 @@ class FixedTermLineWizard(models.TransientModel):
     date_maturity = fields.Date('Fecha hasta')
     days = fields.Integer('Dias')
     rate_type = fields.Selection([('periodo', 'Periodo'), ('dia', 'Dia')], string='Interes por', select=True)
-    rate_periodic = fields.Float('Tasa periodo')
+    rate_periodic = fields.Float('Tasa periodo', digits=(16,4))
     rate_per_day = fields.Float('Tasa por dia', digits=(16,6))
     interest_amount = fields.Float('Interes')
 
@@ -26,6 +26,16 @@ class FixedTermLineWizard(models.TransientModel):
         fixed_term_line_id.rate_per_day = self.rate_per_day
         #fixed_term_line_id.interest_amount = self.interest_amount
         fixed_term_line_id.compute_line()
-    
-#    @api.one
-#    def onchange_recalculate('')
+
+class FixedTermConfirmWizard(models.TransientModel):
+    _name = 'fixed.term.confirm.wizard'
+
+    fixed_term_id = fields.Many2one('fixed.term', string='Plazo Fijo')
+    journal_id = fields.Many2one('account.journal', string='Diario de Plazo Fijo')
+
+    @api.one
+    def confirm_fixed_term(self):
+        fixed_term_id = self.fixed_term_id
+        fixed_term_id.journal_id = self.journal_id
+        fixed_term_id.confirm_fixed_term()
+ 

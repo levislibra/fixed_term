@@ -24,7 +24,8 @@
       <field name="arch" type="xml">
         <form>
           <header>
-             <button name="compute_lines" class="oe_highlight" string="Generar Plazo Fijo" states="borrador" type="object" />
+            <button name="compute_lines" class="oe_highlight" string="Generar Plazo Fijo" states="borrador" type="object" />
+            <button name="action_fixed_term_confirm" class="oe_highlight" string="Confirmar Plazo Fijo" states="borrador" type="object" />
             <field name="state" widget="statusbar"/>
           </header>
           <sheet>
@@ -49,6 +50,7 @@
             </group>
             <notebook>
               <page string="Vencimientos">
+                <button name="invoice_generate" class="oe_highlight" string="Facturar" states="activo" type="object" />
                 <field name="line_ids" attrs="{'readonly': [('state', 'in', ('finalizado', 'cancelado'))]}">
                   <tree editable="1">
                     <field name="date" attrs="{'readonly': [('state', 'in', ('finalizado', 'cancelado'))]}"/>
@@ -60,13 +62,21 @@
                     <field name="rate_periodic" attrs="{'readonly': [('state', 'in', ('finalizado', 'cancelado'))], 'invisible': [('rate_type', '=', 'dia')], 'required': [('rate_type', '=', 'periodo')]}"/>
                     <field name="rate_per_day" attrs="{'readonly': [('state', 'in', ('finalizado', 'cancelado'))], 'invisible': [('rate_type', '=', 'periodo')], 'required': [('rate_type', '=', 'dia')]}"/>
                     <field name="interest_amount" sum="Total"/>
-                    <field name="id" invisible="1"/>
-                    <button name="confirmar" class="oe_highlight" string="Confirmar" states="borrador" type="object" />
-                    <button name="action_confirm" class="oe_highlight" string="Recalcular" states="borrador" type="object"/>
-                    <button name="cancel" string="Cancelar" states="borrador" type="object" />
+                    <button name="confirmar" class="oe_highlight" string="Confirmar" states="borrador,activo" type="object" />
+                    <button name="action_confirm" class="oe_highlight" string="Actualizar" states="borrador,activo" type="object"/>
+                    <button name="cancel" string="Cancelar" states="borrador,activo" type="object" />
                     <field name="state"/>
+                    <field name="invoice_id" invisible="0"/>
                   </tree>
                 </field>
+              </page>
+              <page string="Otra informacion">
+                <group>
+                  <group>
+                    <field name="init_account_move_id"/>
+                    <field name="finalized_account_move_id"/>
+                  </group>
+                </group>
               </page>
             </notebook>
           </sheet>
@@ -101,9 +111,48 @@
           <field name="rate_periodic" attrs="{'readonly': [('state', 'in', ('finalizado', 'cancelado'))], 'invisible': [('rate_type', '=', 'dia')], 'required': [('rate_type', '=', 'periodo')]}"/>
           <field name="rate_per_day" attrs="{'readonly': [('state', 'in', ('finalizado', 'cancelado'))], 'invisible': [('rate_type', '=', 'periodo')], 'required': [('rate_type', '=', 'dia')]}"/>
           <field name="interest_amount" sum="Total"/>
+          <button name="action_confirm" class="oe_highlight" string="Actualizar" states="borrador,activo" type="object"/>
           <field name="state"/>
+          <field name="invoice_id"/>
         </tree>
       </field>
+    </record>
+
+
+    <!-- Fixed Term Configuracion -->
+
+    <record model="ir.ui.view" id="fixed_term_config_tree">
+      <field name="name">fixed.term.config</field>
+      <field name="model">fixed.term.config</field>
+      <field name="arch" type="xml">
+        <tree create="false" delete="false">
+          <field name="name"/>
+        </tree>
+      </field>
+    </record>
+
+    <record id="fixed_term_config_form" model="ir.ui.view">
+        <field name="name">fixed.term.config.form</field>
+        <field name="model">fixed.term.config</field>
+        <field name="arch" type="xml">
+            <form string="Configuracion" create="false" delete="false">
+                <sheet>
+                    <group>
+                      <field name="id"/>
+                      <field name="name"/>
+                      <field name="journal_id" domain="[('type', '=', 'general')]" required="1"/>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    
+    <record model="ir.actions.act_window" id="fixed_term_config_action">
+      <field name="name">Configuracion</field>
+      <field name="res_model">fixed.term.config</field>
+      <field name="view_mode">tree,form</field>
+      <field name="view_id" ref="fixed_term_config_tree"/>
     </record>
 
     <!-- actions opening views on models -->
@@ -124,5 +173,7 @@
     
     <menuitem name="Plazos Fijos" id="fixed_term_list_menu_action" parent="fixed_term_list_menu" action="fixed_term_list_action"/>
     <menuitem name="Vencimientos" id="fixed_term_vencimientos_menu_action" parent="fixed_term_list_menu" action="fixed_term_line_list_action"/>
+
+    <menuitem name="Configuracion" id="fixed_term_config_menu_action" parent="fixed_term_configuracion_menu" action="fixed_term_config_action"/>
   </data>
 </openerp>

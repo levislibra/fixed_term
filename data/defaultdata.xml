@@ -1,0 +1,7 @@
+<openerp>
+	<data>
+		<record id="item_configuration" model="fixed.term.config">
+		    <field name="name">Configuracion</field>
+		</record>
+	</data>
+</openerp>

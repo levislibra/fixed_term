@@ -1,10 +1,8 @@
 <?xml version="1.0" encoding="utf-8" ?>
 <odoo>
-
-    <!--<act_window id="fixed_term_line_wizard_action" name="Recaclular" res_model="fixed.term.line.wizard" src_model="fixed.term.line" view_mode="form" target="new"/>-->
     
     <record id="fixed_term_line_recalculate_wizard_view" model="ir.ui.view">
-        <field name="name">Recalcular</field>
+        <field name="name">Actualizar</field>
         <field name="model">fixed.term.line.wizard</field>
         <field name="arch" type="xml">
             <form>
@@ -18,7 +16,28 @@
                     <field name="interest_amount" readonly="1"/>
                 </group>
                 <footer>
-                    <button name="recalculate_fixed_term_line" string="Recalcular" class="oe_right oe_highlight" type="object"/>
+                    <button name="recalculate_fixed_term_line" string="Actualizar" class="oe_right oe_highlight" type="object"/>
+                    <button string="Cancel" class="oe_right" special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+
+
+    <record id="fixed_term_confirm_wizard_view" model="ir.ui.view">
+        <field name="name">Confirmar Plazo Fijo</field>
+        <field name="model">fixed.term.confirm.wizard</field>
+        <field name="arch" type="xml">
+            <form>
+                <group>
+                    <group>
+                        <field name="journal_id" domain="[('type', '=', 'general')]" required="1"/>
+                    </group>
+                    <group>
+                    </group>
+                </group>
+                <footer>
+                    <button name="confirm_fixed_term" string="Confirmar" class="oe_right oe_highlight" type="object"/>
                     <button string="Cancel" class="oe_right" special="cancel"/>
                 </footer>
             </form>
