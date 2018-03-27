@@ -14,28 +14,40 @@ class FixedTerm(models.Model):
 	date = fields.Date('Fecha', required=True, default=lambda *a: time.strftime('%Y-%m-%d'))
 	partner_id = fields.Many2one('res.partner', 'Proveedor', required=True)
 	account_id = fields.Many2one('account.account', 'Cuenta', required=True)
-	property_account_receivable_id = fields.Integer('Default debit id', compute='_compute_receivable')
+	property_account_receivable_id = fields.Integer('Default debit id', copute='_compute_receivable')
 	property_account_payable_id = fields.Integer('Default Credit id', compute='_compute_payable')
 	amount_balance_account = fields.Float('Balance', compute='_compute_balance')
+	currency_id = fields.Many2one('res.currency', string="Moneda")
 	amount = fields.Float('Monto', required=True)
 	line_ids = fields.One2many('fixed.term.line', 'fixed_term_id', 'Lineas')
-	interest_format = fields.Selection([('mensual', 'Mensual'), ('mensual_capitalizable', 'Mensual Capitalizable')], string='Formato del interes', required=True, default='mensual')
-	periodic_count = fields.Integer('Cantidad de periodos', required=True)
-	rate_type = fields.Selection([('periodo', 'Periodo'), ('dia', 'Dia')], string='Interes por', required=True, default='periodo')
-	rate_periodic = fields.Float('Tasa periodo', digits=(16,4))
-	rate_per_day = fields.Float('Tasa por dia', digits=(16,6))
+	unit_of_time = fields.Selection([('mensual', 'Mensual'), ('bimestral', 'Bimestral'), ('trimestral', 'Trimestral'), ('cuatrimestral', 'Cuatrimestral'), ('semestral', 'Semestral'), ('anual', 'Anual')], string='Unidad de tiempo', required=True, default='mensual')
+	periodic_time = fields.Integer('Cantidad de periodos', required=True)
+	compound_interest = fields.Boolean('Interes compuesto', default=False)
+	rate_periodic = fields.Float('Tasa del periodo', digits=(16,6))
+	precancelable = fields.Boolean('Precancelable', default=True)
+	precancelable_rate_periodic = fields.Float('Tasa del periodo cancelado', digits=(16,6))
 	state = fields.Selection([('borrador', 'Borrador'), ('activo', 'Activo'), ('finalizado', 'Finalizado'), ('cancelado', 'Cancelado')], string='Estado', readonly=True, default='borrador')
 	journal_id = fields.Many2one('account.journal', 'Diario de Plazo Fijo')
 	init_account_move_id = fields.Many2one('account.move', 'Asiento inicial')
 	finalized_account_move_id = fields.Many2one('account.move', 'Asiento de cierre')
 
 	@api.one
+	@api.onchange('partner_id')
 	def _compute_receivable(self):
 		self.property_account_receivable_id = self.partner_id.property_account_receivable_id.id
 
 	@api.one
+	@api.onchange('partner_id')
 	def _compute_payable(self):
 		self.property_account_payable_id = self.partner_id.property_account_payable_id.id
+
+	@api.one
+	@api.onchange('partner_id', 'account_id')
+	def _compute_currency_id(self):
+		if len(self.account_id.currency_id) > 0:
+			self.currency_id = self.account_id.currency_id
+		else:
+			self.currency_id = self.env.user.company_id.currency_id.id
 
 	@api.one
 	def _compute_name(self):
@@ -80,8 +92,20 @@ class FixedTerm(models.Model):
 			prev_fixed_term_line_id = None
 			date_maturity = None
 			i = 1
-			while i <= self.periodic_count:
-				relative_date = relativedelta.relativedelta(months=i)
+			while i <= self.periodic_time:
+				if self.unit_of_time == "mensual":
+					relative_date = relativedelta.relativedelta(months=i)
+				if self.unit_of_time == "bimestral":
+					relative_date = relativedelta.relativedelta(months=i*2)
+				elif self.unit_of_time == "trimestral":
+					relative_date = relativedelta.relativedelta(months=i*3)
+				elif self.unit_of_time == "cuatrimestral":
+					relative_date = relativedelta.relativedelta(months=i*4)
+				elif self.unit_of_time == "semestral":
+					relative_date = relativedelta.relativedelta(months=i*6)
+				elif self.unit_of_time == "anual":
+					relative_date = relativedelta.relativedelta(years=i)
+				
 				if new_line_id != None:
 					prev_fixed_term_line_id = new_line_id.id
 					old_line_id = new_line_id
@@ -89,13 +113,11 @@ class FixedTerm(models.Model):
 				new_line = {
 						'fixed_term_id': self.id,
 						'date': initial_date,
+						'date_maturity': date_maturity,
 						'number': i,
 						'amount': amount,
-						#'theoretical_amount': algo,
-						'date_maturity': date_maturity,
-						'rate_type': self.rate_type,
 						'rate_periodic': self.rate_periodic,
-						'rate_per_day': self.rate_per_day,
+						'precancelable_rate_periodic': self.precancelable_rate_periodic,
 						'state': 'borrador',
 						'prev_fixed_term_line_id': prev_fixed_term_line_id,
 				}
@@ -106,7 +128,8 @@ class FixedTerm(models.Model):
 				self.line_ids = [new_line_id.id]
 				i += 1
 				initial_date = date_maturity
-				if self.interest_format == 'mensual_capitalizable':
+				if self.compound_interest:
+					# Interes capitalizable
 					amount = new_line_id.amount + new_line_id.interest_amount
 
 	@api.one
@@ -153,8 +176,13 @@ class FixedTerm(models.Model):
 			new_move_id.post()
 			self.init_account_move_id = new_move_id.id
 			self.state = 'activo'
+			i = 0
 			for line_id in self.line_ids:
-				line_id.state = 'activo'
+				if i == 0:
+					line_id.state = 'activo'
+				else:
+					line_id.state = 'pendiente'
+				i += 1
 
 	@api.multi
 	def action_fixed_term_confirm(self):
@@ -174,7 +202,7 @@ class FixedTerm(models.Model):
 			'view_type': 'form',
 			'view_mode': 'form',
 			'res_id'    : new.id,
-			'view_id': self.env.ref('fixed_term.fixed_term_confirm_wizard_view', False).id,
+			'view_id': self.env.ref('fixed_term.fixed_term_confirm_wizard', False).id,
 			'target': 'new',
 		}
 
@@ -188,14 +216,22 @@ class FixedTermLine(models.Model):
 	fixed_term_id = fields.Many2one('fixed.term', 'Plazo Fijo', ondelete='cascade')
 	number = fields.Integer('Numero')
 	amount = fields.Float('Monto')
-	theoretical_amount = fields.Float('Monto teorico')
 	date_maturity = fields.Date('Vencimiento')
 	days = fields.Integer('Dias')
-	rate_type = fields.Selection([('periodo', 'Periodo'), ('dia', 'Dia')], string='Interes por', select=True, default='periodo')
-	rate_periodic = fields.Float('Tasa periodo', digits=(16,4))
-	rate_per_day = fields.Float('Tasa por dia', digits=(16,6))
+	cancel_days = fields.Integer('Dias')
+	percentage_complete_of_time = fields.Float("Completado", readonly=True, default=1)
+
+	unit_of_time = fields.Selection([('mensual', 'Mensual'), ('bimestral', 'Bimestral'), ('trimestral', 'Trimestral'), ('cuatrimestral', 'Cuatrimestral'), ('semestral', 'Semestral'), ('anual', 'Anual')], string='Unidad de tiempo', related='fixed_term_id.unit_of_time', readonly=True)
+	compound_interest = fields.Boolean('Interes compuesto', related='fixed_term_id.compound_interest', readonly=True)
+	precancelable = fields.Boolean('Precancelable', related='fixed_term_id.precancelable', readonly=True)
+	periodic_time = fields.Integer('Cantidad de periodos', related='fixed_term_id.periodic_time', readonly=True)
+	rate_periodic = fields.Float('Tasa periodo', digits=(16,6))
+	precancelable_rate_periodic = fields.Float('Tasa periodo cancelado', digits=(16,6))
+
+	currency_id = fields.Many2one('res.currency', string="Moneda", related='fixed_term_id.currency_id', readonly=True)
 	interest_amount = fields.Float('Interes')
-	state = fields.Selection([('borrador', 'Borrador'), ('activo', 'Activo'), ('por_facturar', 'A Facturar'), ('finalizado', 'Finalizado'), ('cancelado', 'Cancelado')], string='Estado', readonly=True, default='borrador')
+	state = fields.Selection([('borrador', 'Borrador'), ('pendiente', 'Pendiente'), ('activo', 'Activo'), ('por_facturar', 'A Facturar'), ('precancelado', 'Precancelado'), ('finalizado', 'Finalizado'), ('cancelado', 'Cancelado')], string='Estado', readonly=True, default='borrador')
+	sub_state = fields.Selection([('activo', 'Activo'), ('por_facturar', 'A Facturar'), ('precancelado', 'Precancelado')], string='Sub estado', readonly=True, default='activo')
 	prev_fixed_term_line_id = fields.Many2one('fixed.term.line', 'Linea previa')
 	next_fixed_term_line_id = fields.Many2one('fixed.term.line', 'Linea proxima')
 	invoice_id = fields.Many2one('account.invoice', 'Factura')
@@ -206,6 +242,7 @@ class FixedTermLine(models.Model):
 
 	@api.one
 	def compute_days(self):
+		old_days = self.days
 		date = datetime.strptime(str(self.date), "%Y-%m-%d")
 		date_maturity = datetime.strptime(self.date_maturity, "%Y-%m-%d")
 		if date_maturity > date:
@@ -214,12 +251,14 @@ class FixedTermLine(models.Model):
 		else:
 			self.days = 0
 
+		if old_days == 0:
+			self.percentage_complete_of_time = 1
+		else:
+			self.percentage_complete_of_time = (self.days * self.percentage_complete_of_time) / old_days
+
 	@api.one
 	def compute_interest_amount(self):
-		if self.rate_type == 'periodo':
-			self.interest_amount = round(self.amount * self.rate_periodic, 2)
-		elif self.rate_type == 'dia':
-			self.interest_amount = round(self.amount * self.days * self.rate_per_day, 2)
+		self.interest_amount = round(self.amount * self.rate_periodic, 2)
 
 	@api.one
 	def compute_line(self):
@@ -229,30 +268,54 @@ class FixedTermLine(models.Model):
 		self.compute_interest_amount()
 
 	@api.multi
-	def action_confirm(self):    
-		if True:
-			params = {
-				'fixed_term_line_id': self.id,
-				'amount': self.amount,
-				'date_maturity': self.date_maturity,
-				'days': self.days,
-				'rate_type': self.rate_type,
-				'rate_periodic': self.rate_periodic,
-				'rate_per_day': self.rate_per_day,
-				'interest_amount': self.interest_amount,
-			}
-			view_id = self.env['fixed.term.line.wizard']
-			new = view_id.create(params)
-			return {
-				'type': 'ir.actions.act_window',
-				'name': 'Actualizar',
-				'res_model': 'fixed.term.line.wizard',
-				'view_type': 'form',
-				'view_mode': 'form',
-				'res_id'    : new.id,
-				'view_id': self.env.ref('fixed_term.fixed_term_line_recalculate_wizard_view', False).id,
-				'target': 'new',
-			}
+	def action_confirm(self):
+		params = {
+			'fixed_term_line_id': self.id,
+			'date': self.date,
+			'amount': self.amount,
+			'date_maturity': self.date_maturity,
+			'new_date_maturity': self.date_maturity,
+			'days': self.days,
+			'rate_periodic': self.rate_periodic,
+			'precancelable_rate_periodic': self.precancelable_rate_periodic,
+			'interest_amount': self.interest_amount,
+			'precancelable': self.precancelable,
+		}
+		view_id = self.env['fixed.term.line.wizard']
+		new = view_id.create(params)
+		return {
+			'type': 'ir.actions.act_window',
+			'name': 'Actualizar',
+			'res_model': 'fixed.term.line.wizard',
+			'view_type': 'form',
+			'view_mode': 'form',
+			'res_id': new.id,
+			'view_id': self.env.ref('fixed_term.fixed_term_line_recalculate_wizard', False).id,
+			'target': 'new',
+		}
+
+	@api.multi
+	def action_validate(self):
+		params = {
+			'fixed_term_line_id': self.id,
+			#'journal_id': algo,
+		}
+		view_id = self.env['fixed.term.line.validate.wizard']
+		new = view_id.create(params)
+		return {
+			'type': 'ir.actions.act_window',
+			'name': 'Validar',
+			'res_model': 'fixed.term.line.validate.wizard',
+			'view_type': 'form',
+			'view_mode': 'form',
+			'res_id': new.id,
+			'view_id': self.env.ref('fixed_term.fixed_term_validate_wizard', False).id,
+			'target': 'new',
+		}
+
+	@api.one
+	def validate_fixed_term_line(self):
+		pass
 
 
 class FixedTermLine(models.Model):

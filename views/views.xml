@@ -36,36 +36,39 @@
                 <field name="partner_id" options="{'no_quick_create':True,'no_create_edit':True}" domain="[('supplier', '=', True)]" attrs="{'readonly': [('state', '!=', 'borrador')]}"/>
                 <field name="property_account_receivable_id" invisible="1"/>
                 <field name="property_account_payable_id" invisible="1"/>
-                <field name="account_id" options="{'no_quick_create':True,'no_create_edit':True}" domain="['|', ('id', '=', property_account_receivable_id), ('id', '=', property_account_payable_id)]" attrs="{'readonly': [('state', '!=', 'borrador')]}"/>
+                <field name="account_id" options="{'no_quick_create': True,'no_create_edit': True}" domain="['|', ('id', '=', property_account_receivable_id), ('id', '=', property_account_payable_id)]" attrs="{'readonly': [('state', '!=', 'borrador')]}"/>
                 <field name="amount_balance_account" readonly="1"/>
+                <field name="currency_id" domain="[('active', '=', True)]" options="{'no_quick_create': True,'no_create_edit': True}" attrs="{'readonly': [('state', '!=', 'borrador')]}"/>
                 <field name="amount" attrs="{'readonly': [('state', '!=', 'borrador')]}"/>
               </group>
               <group>
-                <field name="interest_format" attrs="{'readonly': [('state', '!=', 'borrador')]}"/>
-                <field name="periodic_count" attrs="{'readonly': [('state', '!=', 'borrador')]}"/>
-                <field name="rate_type" attrs="{'readonly': [('state', '!=', 'borrador')]}"/>
-                <field name="rate_periodic" attrs="{'readonly': [('state', '!=', 'borrador')], 'invisible': [('rate_type', '=', 'dia')], 'required': [('rate_type', '=', 'periodo')]}"/>
-                <field name="rate_per_day" attrs="{'readonly': [('state', '!=', 'borrador')], 'invisible': [('rate_type', '=', 'periodo')], 'required': [('rate_type', '=', 'dia')]}"/>
+                <field name="unit_of_time" attrs="{'readonly': [('state', '!=', 'borrador')]}"/>
+                <field name="periodic_time" attrs="{'readonly': [('state', '!=', 'borrador')]}"/>
+                <field name="compound_interest" attrs="{'readonly': [('state', '!=', 'borrador')]}"/>
+                <field name="rate_periodic" attrs="{'readonly': [('state', '!=', 'borrador')]}"/>
+                <field name="precancelable" attrs="{'readonly': [('state', '!=', 'borrador')]}"/>
+                <field name="precancelable_rate_periodic" attrs="{'readonly': [('state', '!=', 'borrador')], 'invisible': [('precancelable', '=', False)], 'required': [('precancelable', '=', True)]}"/>
               </group>
             </group>
             <notebook>
               <page string="Vencimientos">
-                <button name="invoice_generate" class="oe_highlight" string="Facturar" states="activo" type="object" />
                 <field name="line_ids" attrs="{'readonly': [('state', 'in', ('finalizado', 'cancelado'))]}">
                   <tree editable="1">
                     <field name="date" attrs="{'readonly': [('state', 'in', ('finalizado', 'cancelado'))]}"/>
-                    <field name="theoretical_amount" attrs="{'readonly': [('state', 'in', ('finalizado', 'cancelado'))]}"/>
                     <field name="amount" attrs="{'readonly': [('state', 'in', ('finalizado', 'cancelado'))]}"/>
                     <field name="date_maturity" attrs="{'readonly': [('state', 'in', ('finalizado', 'cancelado'))]}"/>
                     <field name="days" sum="Total"  attrs="{'readonly': [('state', 'in', ('finalizado', 'cancelado'))]}"/>
-                    <field name="rate_type" attrs="{'readonly': [('state', 'in', ('finalizado', 'cancelado'))]}"/>
-                    <field name="rate_periodic" attrs="{'readonly': [('state', 'in', ('finalizado', 'cancelado'))], 'invisible': [('rate_type', '=', 'dia')], 'required': [('rate_type', '=', 'periodo')]}"/>
-                    <field name="rate_per_day" attrs="{'readonly': [('state', 'in', ('finalizado', 'cancelado'))], 'invisible': [('rate_type', '=', 'periodo')], 'required': [('rate_type', '=', 'dia')]}"/>
-                    <field name="interest_amount" sum="Total"/>
-                    <button name="confirmar" class="oe_highlight" string="Confirmar" states="borrador,activo" type="object" />
-                    <button name="action_confirm" class="oe_highlight" string="Actualizar" states="borrador,activo" type="object"/>
-                    <button name="cancel" string="Cancelar" states="borrador,activo" type="object" />
+                    <field name="percentage_complete_of_time" attrs="{'readonly': [('state', 'in', ('finalizado', 'cancelado'))]}"/>
+                    <field name="unit_of_time" attrs="{'readonly': [('state', 'in', ('finalizado', 'cancelado'))]}"/>
+                    <field name="rate_periodic" attrs="{'readonly': [('state', 'in', ('finalizado', 'cancelado'))]}"/>
+                    <field name="precancelable_rate_periodic" attrs="{'readonly': [('state', 'in', ('finalizado', 'cancelado'))], 'invisible': [('sub_state', '!=', 'precancelado')]}"/>
+                    <field name="currency_id" invisible="1"/>
+                    <field name="interest_amount" options="{'currency_field': 'currency_id'}" widget="monetary"  sum="Total"/>
+                    <button name="action_validate" class="oe_highlight" string="Validar" states="activo,por_facturar" type="object"/>
+                    <button name="action_confirm" class="oe_highlight" string="Actualizar" states="activo" type="object"/>
+                    <button name="cancel" string="Cancelar" states="activo" type="object" />
                     <field name="state"/>
+                    <field name="sub_state"/>
                     <field name="invoice_id" invisible="0"/>
                   </tree>
                 </field>
@@ -103,13 +106,11 @@
         <tree editable="0">
           <field name="id"/>
           <field name="date" attrs="{'readonly': [('state', 'in', ('finalizado', 'cancelado'))]}"/>
-          <field name="theoretical_amount" attrs="{'readonly': [('state', 'in', ('finalizado', 'cancelado'))]}"/>
           <field name="amount" attrs="{'readonly': [('state', 'in', ('finalizado', 'cancelado'))]}"/>
           <field name="date_maturity" attrs="{'readonly': [('state', 'in', ('finalizado', 'cancelado'))]}"/>
           <field name="days" sum="Total"  attrs="{'readonly': [('state', 'in', ('finalizado', 'cancelado'))]}"/>
-          <field name="rate_type" attrs="{'readonly': [('state', 'in', ('finalizado', 'cancelado'))]}"/>
-          <field name="rate_periodic" attrs="{'readonly': [('state', 'in', ('finalizado', 'cancelado'))], 'invisible': [('rate_type', '=', 'dia')], 'required': [('rate_type', '=', 'periodo')]}"/>
-          <field name="rate_per_day" attrs="{'readonly': [('state', 'in', ('finalizado', 'cancelado'))], 'invisible': [('rate_type', '=', 'periodo')], 'required': [('rate_type', '=', 'dia')]}"/>
+          <field name="rate_periodic" attrs="{'readonly': [('state', 'in', ('finalizado', 'cancelado'))]}"/>
+          <field name="precancelable_rate_periodic" attrs="{'readonly': [('state', 'in', ('finalizado', 'cancelado'))]}"/>
           <field name="interest_amount" sum="Total"/>
           <button name="action_confirm" class="oe_highlight" string="Actualizar" states="borrador,activo" type="object"/>
           <field name="state"/>

@@ -1,19 +1,25 @@
 <?xml version="1.0" encoding="utf-8" ?>
 <odoo>
     
-    <record id="fixed_term_line_recalculate_wizard_view" model="ir.ui.view">
+    <record id="fixed_term_line_recalculate_wizard" model="ir.ui.view">
         <field name="name">Actualizar</field>
         <field name="model">fixed.term.line.wizard</field>
         <field name="arch" type="xml">
             <form>
                 <group>
-                    <field name="date_maturity" required="1"/>
-                    <field name="amount" required="1"/>
-                    <field name="days" readonly="1"/>
-                    <field name="rate_type" required="1"/>
-                    <field name="rate_periodic" attrs="{'invisible': [('rate_type', '=', 'dia')], 'required': [('rate_type', '=', 'periodo')]}"/>
-                    <field name="rate_per_day" attrs="{'invisible': [('rate_type', '=', 'periodo')], 'required': [('rate_type', '=', 'dia')]}"/>
-                    <field name="interest_amount" readonly="1"/>
+                    <group>
+                        <field name="execute_precancelable" attrs="{'invisible': [('precancelable', '=', False)]}"/>
+                        <field name="new_date_maturity" attrs="{'invisible': [('execute_precancelable', '=', False)], 'required': [('execute_precancelable', '=', True)]}"/>
+                        <field name="rate_periodic" attrs="{'invisible': [('execute_precancelable', '=', True)], 'required': [('execute_precancelable', '=', False)]}"/>
+                        <field name="precancelable_rate_periodic" attrs="{'invisible': [('execute_precancelable', '=', False)], 'required': [('execute_precancelable', '=', True)]}"/>
+                    </group>
+                    <group>
+                        <field name="date_maturity" readonly="1"/>
+                        <field name="amount" readonly="1"/>
+                        <field name="days" readonly="1"/>
+                        <field name="precancelable" invisible="1"/>
+                        <field name="interest_amount" readonly="1"/>
+                    </group>
                 </group>
                 <footer>
                     <button name="recalculate_fixed_term_line" string="Actualizar" class="oe_right oe_highlight" type="object"/>
@@ -24,7 +30,7 @@
     </record>
 
 
-    <record id="fixed_term_confirm_wizard_view" model="ir.ui.view">
+    <record id="fixed_term_confirm_wizard" model="ir.ui.view">
         <field name="name">Confirmar Plazo Fijo</field>
         <field name="model">fixed.term.confirm.wizard</field>
         <field name="arch" type="xml">
@@ -38,6 +44,27 @@
                 </group>
                 <footer>
                     <button name="confirm_fixed_term" string="Confirmar" class="oe_right oe_highlight" type="object"/>
+                    <button string="Cancel" class="oe_right" special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+
+    <record id="fixed_term_validate_wizard" model="ir.ui.view">
+        <field name="name">Validar Plazo Fijo</field>
+        <field name="model">fixed.term.line.validate.wizard</field>
+        <field name="arch" type="xml">
+            <form>
+                <group>
+                    <group>
+                        <field name="journal_id" domain="[('type', '=', 'purchase')]" required="1"/>
+                        <field name="use_documents"/>
+                    </group>
+                    <group>
+                    </group>
+                </group>
+                <footer>
+                    <button name="validate_fixed_term_line" string="Validate" class="oe_right oe_highlight" type="object"/>
                     <button string="Cancel" class="oe_right" special="cancel"/>
                 </footer>
             </form>
