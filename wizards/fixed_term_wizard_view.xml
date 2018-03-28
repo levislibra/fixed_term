@@ -57,14 +57,15 @@
             <form>
                 <group>
                     <group>
-                        <field name="journal_id" domain="[('type', '=', 'purchase')]" required="1"/>
+                        <field name="invoice_journal_id" domain="[('type', '=', 'purchase')]" required="1"/>
                         <field name="use_documents"/>
+                        <field name="document_number" attrs="{'invisible': [('use_documents', '=', False)], 'required': [('use_documents', '=', True)]}"/>
                     </group>
                     <group>
                     </group>
                 </group>
                 <footer>
-                    <button name="validate_fixed_term_line" string="Validate" class="oe_right oe_highlight" type="object"/>
+                    <button name="validate_fixed_term_line" string="Validar" class="oe_right oe_highlight" type="object"/>
                     <button string="Cancel" class="oe_right" special="cancel"/>
                 </footer>
             </form>

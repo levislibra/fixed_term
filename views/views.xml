@@ -48,6 +48,10 @@
                 <field name="rate_periodic" attrs="{'readonly': [('state', '!=', 'borrador')]}"/>
                 <field name="precancelable" attrs="{'readonly': [('state', '!=', 'borrador')]}"/>
                 <field name="precancelable_rate_periodic" attrs="{'readonly': [('state', '!=', 'borrador')], 'invisible': [('precancelable', '=', False)], 'required': [('precancelable', '=', True)]}"/>
+
+                <field name="vat_tax" attrs="{'readonly': [('state', '!=', 'borrador')]}"/>
+                <field name="vat_tax_included" attrs="{'readonly': [('state', '!=', 'borrador')], 'invisible': [('vat_tax', '=', False)]}"/>
+                <field name="vat_tax_id" attrs="{'readonly': [('state', '!=', 'borrador')], 'invisible': [('vat_tax', '=', False)], 'required': [('vat_tax', '=', True)]}"/>
               </group>
             </group>
             <notebook>
@@ -64,11 +68,15 @@
                     <field name="precancelable_rate_periodic" attrs="{'readonly': [('state', 'in', ('finalizado', 'cancelado'))], 'invisible': [('sub_state', '!=', 'precancelado')]}"/>
                     <field name="currency_id" invisible="1"/>
                     <field name="interest_amount" options="{'currency_field': 'currency_id'}" widget="monetary"  sum="Total"/>
+                    <field name="vat_tax" invisible="1"/>
+                    <field name="vat_tax_id" attrs="{'invisible': [('vat_tax', '=', False)]}"/>
+                    <field name="vat_tax_amount" attrs="{'invisible': [('vat_tax', '=', False)]}" options="{'currency_field': 'currency_id'}" widget="monetary"  sum="Total"/>
+                    <field name="total_amount" options="{'currency_field': 'currency_id'}" widget="monetary"  sum="Total"/>
                     <button name="action_validate" class="oe_highlight" string="Validar" states="activo,por_facturar" type="object"/>
                     <button name="action_confirm" class="oe_highlight" string="Actualizar" states="activo" type="object"/>
-                    <button name="cancel" string="Cancelar" states="activo" type="object" />
+                    <button name="action_cancel" string="Cancelar" states="activo" type="object" />
                     <field name="state"/>
-                    <field name="sub_state"/>
+                    <field name="sub_state" attrs="{'invisible': [('state', 'in', ('borrador', 'activo', 'pendiente', 'por_facturar', 'precancelado'))]}"/>
                     <field name="invoice_id" invisible="0"/>
                   </tree>
                 </field>
@@ -142,6 +150,8 @@
                       <field name="id"/>
                       <field name="name"/>
                       <field name="journal_id" domain="[('type', '=', 'general')]" required="1"/>
+                      <field name="invoice_journal_id" domain="[('type', '=', 'purchase')]" required="1"/>
+                      <field name="automatic_validate"/>
                     </group>
                 </sheet>
             </form>

@@ -19,6 +19,9 @@ class FixedTerm(models.Model):
 	amount_balance_account = fields.Float('Balance', compute='_compute_balance')
 	currency_id = fields.Many2one('res.currency', string="Moneda")
 	amount = fields.Float('Monto', required=True)
+	vat_tax = fields.Boolean('IVA', default=False)
+	vat_tax_included = fields.Boolean('IVA incluido', default=False)
+	vat_tax_id = fields.Many2one('account.tax', 'Tasa de IVA', domain="[('type_tax_use', '=', 'purchase')]")
 	line_ids = fields.One2many('fixed.term.line', 'fixed_term_id', 'Lineas')
 	unit_of_time = fields.Selection([('mensual', 'Mensual'), ('bimestral', 'Bimestral'), ('trimestral', 'Trimestral'), ('cuatrimestral', 'Cuatrimestral'), ('semestral', 'Semestral'), ('anual', 'Anual')], string='Unidad de tiempo', required=True, default='mensual')
 	periodic_time = fields.Integer('Cantidad de periodos', required=True)
@@ -116,6 +119,9 @@ class FixedTerm(models.Model):
 						'date_maturity': date_maturity,
 						'number': i,
 						'amount': amount,
+						'vat_tax': self.vat_tax,
+						'vat_tax_included': self.vat_tax_included,
+						'vat_tax_id': self.vat_tax_id.id,
 						'rate_periodic': self.rate_periodic,
 						'precancelable_rate_periodic': self.precancelable_rate_periodic,
 						'state': 'borrador',
@@ -187,6 +193,7 @@ class FixedTerm(models.Model):
 	@api.multi
 	def action_fixed_term_confirm(self):
 		configuracion_id = self.env['fixed.term.config'].browse(1)
+		default_journal_id = None
 		if len(configuracion_id) > 0:
 			default_journal_id = configuracion_id.journal_id
 		params = {
@@ -214,12 +221,18 @@ class FixedTermLine(models.Model):
 	name = fields.Char('Nombre', compute='_compute_name')
 	date = fields.Date('Fecha')
 	fixed_term_id = fields.Many2one('fixed.term', 'Plazo Fijo', ondelete='cascade')
+	partner_id = fields.Many2one('res.partner', 'Proveedor', related='fixed_term_id.partner_id', readonly=True)
 	number = fields.Integer('Numero')
 	amount = fields.Float('Monto')
+	vat_tax = fields.Boolean('IVA', default=False)
+	vat_tax_included = fields.Boolean('IVA incluido', default=False)
+	vat_tax_id = fields.Many2one('account.tax', 'Tasa de IVA', domain="[('type_tax_use', '=', 'purchase')]")
+	vat_tax_amount = fields.Float('Monto IVA')
+	total_amount = fields.Float('Total')
 	date_maturity = fields.Date('Vencimiento')
 	days = fields.Integer('Dias')
-	cancel_days = fields.Integer('Dias')
 	percentage_complete_of_time = fields.Float("Completado", readonly=True, default=1)
+	journal_id = fields.Many2one('account.journal', 'Diario')
 
 	unit_of_time = fields.Selection([('mensual', 'Mensual'), ('bimestral', 'Bimestral'), ('trimestral', 'Trimestral'), ('cuatrimestral', 'Cuatrimestral'), ('semestral', 'Semestral'), ('anual', 'Anual')], string='Unidad de tiempo', related='fixed_term_id.unit_of_time', readonly=True)
 	compound_interest = fields.Boolean('Interes compuesto', related='fixed_term_id.compound_interest', readonly=True)
@@ -235,6 +248,7 @@ class FixedTermLine(models.Model):
 	prev_fixed_term_line_id = fields.Many2one('fixed.term.line', 'Linea previa')
 	next_fixed_term_line_id = fields.Many2one('fixed.term.line', 'Linea proxima')
 	invoice_id = fields.Many2one('account.invoice', 'Factura')
+	document_number = fields.Char('Numero de documento')
 
 	@api.one
 	def _compute_name(self):
@@ -259,6 +273,20 @@ class FixedTermLine(models.Model):
 	@api.one
 	def compute_interest_amount(self):
 		self.interest_amount = round(self.amount * self.rate_periodic, 2)
+		if self.vat_tax and self.vat_tax_included:
+			self.interest_amount = round(self.interest_amount / (1 + self.vat_tax_id.amount / 100), 2)
+
+
+	@api.one
+	def compute_vat_tax_amount(self):
+		if self.vat_tax:
+			self.vat_tax_amount = round(self.interest_amount * round(self.vat_tax_id.amount/100, 2), 2)
+		else:
+			self.vat_tax_amount = 0
+
+	@api.one
+	def compute_total_amount(self):
+		self.total_amount = self.interest_amount + self.vat_tax_amount
 
 	@api.one
 	def compute_line(self):
@@ -266,6 +294,10 @@ class FixedTermLine(models.Model):
 		self.compute_days()
 		# Compute interest amount
 		self.compute_interest_amount()
+		# compute tax
+		self.compute_vat_tax_amount()
+		# compute total
+		self.compute_total_amount()
 
 	@api.multi
 	def action_confirm(self):
@@ -296,9 +328,13 @@ class FixedTermLine(models.Model):
 
 	@api.multi
 	def action_validate(self):
+		configuracion_id = self.env['fixed.term.config'].browse(1)
+		default_journal_id = None
+		if len(configuracion_id) > 0:
+			invoice_journal_id = configuracion_id.invoice_journal_id
 		params = {
 			'fixed_term_line_id': self.id,
-			#'journal_id': algo,
+			'invoice_journal_id': invoice_journal_id.id,
 		}
 		view_id = self.env['fixed.term.line.validate.wizard']
 		new = view_id.create(params)
@@ -314,12 +350,97 @@ class FixedTermLine(models.Model):
 		}
 
 	@api.one
+	def action_cancel(self):
+		print "CANCELLLLLLLLLL"
+		if self.compound_interest:
+			if self.prev_fixed_term_line_id.state == 'finalizado':
+				self.generate_invoice()
+		self.state = 'cancelado'
+		self.next_fixed_term_line_id.action_cancel()
+
+	@api.one
+	@api.depends('invoice_id.state')
+	def compute_change_state(self):
+		if self.invoice_id.state == 'open' and self.state == 'por_facturar':
+			self.state = 'finalizado'
+			self.next_fixed_term_line_id.state = 'activo'
+
+	@api.multi
 	def validate_fixed_term_line(self):
-		pass
+		self.ensure_one()
+		if self.compound_interest:
+			self.state = 'finalizado'
+			self.next_fixed_term_line_id.state = 'activo'
+			#if es el ultimo => facturar.
+		else:
+			self.generate_invoice()
+			if self.invoice_id.state == 'draft':
+				self.state = 'por_facturar'
+				self.sub_state = 'por_facturar'
+			elif self.invoice_id.state == 'open':
+				self.state = 'finalizado'
+				self.next_fixed_term_line_id.state = 'activo'
 
 
-class FixedTermLine(models.Model):
+	@api.one
+	def generate_invoice(self):
+		currency_id = self.env.user.company_id.currency_id.id
+		configuracion_id = self.env['fixed.term.config'].browse(1)
+		automatic_validate = configuracion_id.automatic_validate
+		# Create invoice line
+		ail_ids = []
+		vat_tax_id = False
+		invoice_line_tax_ids = False
+		#if self.currency_id.name != "ARS":
+		#	raise ValidationError("Por el momento solo se permite plazos fijos en pesos.")
+		if self.vat_tax:
+			vat_tax_id = self.vat_tax_id.id
+			invoice_line_tax_ids = [(6, 0, [vat_tax_id])]
+		price_unit = 0
+		if self.compound_interest:
+			for line_id in self.fixed_term_id.line_ids:
+				if line_id.state == 'finalizado':
+					price_unit += line_id.total_amount
+		else:
+			price_unit = self.total_amount
+		if self.interest_amount > 0:
+			ail = {
+				'name': "Intereses pagados - Plazo Fijo",
+				'quantity':1,
+				'price_unit': price_unit,
+				'vat_tax_id': vat_tax_id,
+				'invoice_line_tax_ids': invoice_line_tax_ids,
+				'report_invoice_line_tax_ids': invoice_line_tax_ids,
+				'account_id': self.journal_id.default_debit_account_id.id,
+			}
+			ail_ids.append((0,0,ail))
+			print ail
+			print ail_ids
+
+		if len(ail_ids) > 0:
+			ai_values = {
+				'type': 'in_invoice',
+			    'account_id': self.fixed_term_id.account_id.id,
+			    'partner_id': self.partner_id.id,
+			    'journal_id': self.journal_id.id,
+			    'currency_id': currency_id,
+			    'company_id': 1,
+			    'date': self.date,
+			    'document_number': self.document_number,
+			    'invoice_line_ids': ail_ids,
+			}
+			new_invoice_id = self.env['account.invoice'].create(ai_values)
+			if automatic_validate:
+				if self.document_number:
+					if len(self.partner_id.afip_responsability_type_id) <= 0:
+						raise ValidationError("Tipo de responsabilidad AFIP no definida en el Proveedor.")
+				new_invoice_id.signal_workflow('invoice_open')
+			self.invoice_id = new_invoice_id.id
+
+class FixedTermConfig(models.Model):
 	_name = 'fixed.term.config'
 
 	name = fields.Char('Nombre', defualt='Configuracion general', readonly=True, required=True)
-	journal_id = fields.Many2one('account.journal', 'Diario de Plazo Fijo')
+	journal_id = fields.Many2one('account.journal', 'Diario de plazo fijo')
+	invoice_journal_id = fields.Many2one('account.journal', 'Diario de facturacion')
+	automatic_validate = fields.Boolean('Validacion automatica de facturas', default=True)
