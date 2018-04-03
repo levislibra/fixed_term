@@ -10,6 +10,7 @@ import numpy as np
 class FixedTerm(models.Model):
 	_name = 'fixed.term'
 
+	_order = 'id desc'
 	name = fields.Char('Nombre', compute='_compute_name')
 	date = fields.Date('Fecha', required=True, default=lambda *a: time.strftime('%Y-%m-%d'))
 	partner_id = fields.Many2one('res.partner', 'Proveedor', required=True)
@@ -31,8 +32,10 @@ class FixedTerm(models.Model):
 	precancelable_rate_periodic = fields.Float('Tasa del periodo cancelado', digits=(16,6))
 	state = fields.Selection([('borrador', 'Borrador'), ('activo', 'Activo'), ('finalizado', 'Finalizado'), ('cancelado', 'Cancelado')], string='Estado', readonly=True, default='borrador')
 	journal_id = fields.Many2one('account.journal', 'Diario de Plazo Fijo')
+	invoice_journal_id = fields.Many2one('account.journal', string='Diario de factura')
 	init_account_move_id = fields.Many2one('account.move', 'Asiento inicial')
 	finalized_account_move_id = fields.Many2one('account.move', 'Asiento de cierre')
+	finalized_date = fields.Date('Fecha')
 
 	@api.one
 	@api.onchange('partner_id')
@@ -114,18 +117,19 @@ class FixedTerm(models.Model):
 					old_line_id = new_line_id
 				date_maturity = datetime.strptime(self.date, "%Y-%m-%d") + relative_date
 				new_line = {
-						'fixed_term_id': self.id,
-						'date': initial_date,
-						'date_maturity': date_maturity,
-						'number': i,
-						'amount': amount,
-						'vat_tax': self.vat_tax,
-						'vat_tax_included': self.vat_tax_included,
-						'vat_tax_id': self.vat_tax_id.id,
-						'rate_periodic': self.rate_periodic,
-						'precancelable_rate_periodic': self.precancelable_rate_periodic,
-						'state': 'borrador',
-						'prev_fixed_term_line_id': prev_fixed_term_line_id,
+					'fixed_term_id': self.id,
+					'date': initial_date,
+					'date_maturity': date_maturity,
+					'origin_date_maturity': date_maturity,
+					'number': i,
+					'amount': amount,
+					'vat_tax': self.vat_tax,
+					'vat_tax_included': self.vat_tax_included,
+					'vat_tax_id': self.vat_tax_id.id,
+					'rate_periodic': self.rate_periodic,
+					'precancelable_rate_periodic': self.precancelable_rate_periodic,
+					'state': 'borrador',
+					'prev_fixed_term_line_id': prev_fixed_term_line_id,
 				}
 				new_line_id = self.env['fixed.term.line'].create(new_line)
 				new_line_id.compute_line()
@@ -200,18 +204,147 @@ class FixedTerm(models.Model):
 			'fixed_term_id': self.id,
 			'journal_id': default_journal_id.id,
 		}
-		view_id = self.env['fixed.term.confirm.wizard']
+		view_id = self.env['fixed.term.wizard']
 		new = view_id.create(params)
 		return {
 			'type': 'ir.actions.act_window',
 			'name': 'Confirmar Plazo Fijo',
-			'res_model': 'fixed.term.confirm.wizard',
+			'res_model': 'fixed.term.wizard',
 			'view_type': 'form',
 			'view_mode': 'form',
 			'res_id'    : new.id,
 			'view_id': self.env.ref('fixed_term.fixed_term_confirm_wizard', False).id,
 			'target': 'new',
 		}
+
+	@api.multi
+	def action_fixed_term_finalized(self):
+		params = {
+			'fixed_term_id': self.id,
+			#'journal_id': default_journal_id.id,
+		}
+		view_id = self.env['fixed.term.wizard']
+		new = view_id.create(params)
+		return {
+			'type': 'ir.actions.act_window',
+			'name': 'Finalizar Plazo Fijo',
+			'res_model': 'fixed.term.wizard',
+			'view_type': 'form',
+			'view_mode': 'form',
+			'res_id'    : new.id,
+			'view_id': self.env.ref('fixed_term.fixed_term_finalized_wizard', False).id,
+			'target': 'new',
+		}
+
+	@api.one
+	def finalized_fixed_term(self):
+			#Creamos asiento retornando el dinero de la cuenta del proveedor
+			aml = {
+			    'name': "Credito por finalizacion de Plazo Fijo",
+			    'partner_id': self.partner_id.id,
+			    'account_id': self.account_id.id,
+			    'journal_id': self.journal_id.id,
+			    'date': self.finalized_date,
+			    'date_maturity': self.finalized_date,
+			    'credit': self.amount,
+			}
+
+			aml2 = {
+			    'name': "Debito por finalizacion de Plazo Fijo",
+			    'account_id': self.journal_id.default_debit_account_id.id,
+			    'journal_id': self.journal_id.id,
+			    'date': self.finalized_date,
+			    'date_maturity': self.finalized_date,
+			    'debit': self.amount,
+			    'partner_id': self.partner_id.id,
+			}
+			am_values = {
+			    'journal_id': self.journal_id.id,
+			    'partner_id': self.partner_id.id,
+			    'state': 'draft',
+			    'name': 'PLAZO-FIJO-FiNALIZADO/'+str(self.id).zfill(5),
+			    'date': self.finalized_date,
+			    'line_ids': [(0, 0, aml), (0, 0, aml2)],
+			}
+			new_move_id = self.env['account.move'].create(am_values)
+			new_move_id.post()
+			self.finalized_account_move_id = new_move_id.id
+			self.state = 'finalizado'
+			for line_id in self.line_ids:
+				if line_id.state != 'cancelado' and line_id.state != 'finalizado':
+					line_id.state = 'finalizado'
+
+	@api.one
+	def check_invoice_pending(self):
+		# check if invoice
+		invoice_pending = 0
+		finalized = 0
+		cancel = 0
+		active = 0
+		invoice = 0
+		for line_id in self.line_ids:
+			if line_id.state == 'por_facturar':
+				invoice_pending += 1
+			elif line_id.state == 'activo':
+				active += 1
+			elif line_id.state == 'finalizado':
+				finalized += 1
+			elif line_id.state == 'cancelado':
+				cancel += 1
+			if len(line_id.invoice_id) > 0:
+				invoice += 1
+		if self.compound_interest:
+			if finalized == 0:
+				raise ValidationError("Nada por facturar.")
+			elif active > 0:
+				raise ValidationError("Quedan vencimientos activos.")
+			elif invoice == 1:
+				raise ValidationError("Todo esta facturado.")
+		else:
+			if invoice_pending == 0:
+				raise ValidationError("Nada por facturar.")
+
+	@api.multi
+	def action_invoice_generate(self):
+		self.check_invoice_pending()
+		configuracion_id = self.env['fixed.term.config'].browse(1)
+		default_journal_id = None
+		if len(configuracion_id) > 0:
+			invoice_journal_id = configuracion_id.invoice_journal_id
+		params = {
+			'fixed_term_id': self.id,
+			'invoice_journal_id': invoice_journal_id.id,
+		}
+		view_id = self.env['fixed.term.wizard']
+		new = view_id.create(params)
+		return {
+			'type': 'ir.actions.act_window',
+			'name': 'Validar',
+			'res_model': 'fixed.term.wizard',
+			'view_type': 'form',
+			'view_mode': 'form',
+			'res_id': new.id,
+			'view_id': self.env.ref('fixed_term.fixed_term_invoice_wizard', False).id,
+			'target': 'new',
+		}
+
+	@api.one
+	def invoice_generate(self):
+		if self.compound_interest:
+			interest_amount = 0
+			for line_id in self.line_ids:
+				interest_amount += line_id.interest_amount
+				finalized = line_id.state == 'finalizado'
+				invoice = len(line_id.invoice_id) > 0
+				next_exist = len(line_id.next_fixed_term_line_id) > 0
+				next_state_cancel = next_exist and line_id.next_fixed_term_line_id.state == 'cancelado'
+				if finalized and (not invoice) and ( (not next_exist)  or (next_exist and next_state_cancel)):
+					line_id.generate_invoice(interest_amount)
+		else:
+			for line_id in self.line_ids:
+				if line_id.state == 'por_facturar':
+					line_id.generate_invoice(line_id.interest_amount)
+					line_id.state = 'finalizado'
 
 
 class FixedTermLine(models.Model):
@@ -230,8 +363,11 @@ class FixedTermLine(models.Model):
 	vat_tax_amount = fields.Float('Monto IVA')
 	total_amount = fields.Float('Total')
 	date_maturity = fields.Date('Vencimiento')
+	origin_date_maturity = fields.Date('Vencimiento original')
+	old_date_maturity = fields.Date('Vencimiento previo')
 	days = fields.Integer('Dias')
-	percentage_complete_of_time = fields.Float("Completado", readonly=True, default=1)
+	origin_days = fields.Integer('Dias original', compute='_compute_orgin_days')
+	percentage_complete_of_time = fields.Float("Completado", compute='_compute_percentage_complete', digits=(16,2))
 	journal_id = fields.Many2one('account.journal', 'Diario')
 
 	unit_of_time = fields.Selection([('mensual', 'Mensual'), ('bimestral', 'Bimestral'), ('trimestral', 'Trimestral'), ('cuatrimestral', 'Cuatrimestral'), ('semestral', 'Semestral'), ('anual', 'Anual')], string='Unidad de tiempo', related='fixed_term_id.unit_of_time', readonly=True)
@@ -239,7 +375,10 @@ class FixedTermLine(models.Model):
 	precancelable = fields.Boolean('Precancelable', related='fixed_term_id.precancelable', readonly=True)
 	periodic_time = fields.Integer('Cantidad de periodos', related='fixed_term_id.periodic_time', readonly=True)
 	rate_periodic = fields.Float('Tasa periodo', digits=(16,6))
+	old_rate_periodic = fields.Float('Tasa periodo previo', digits=(16,6))
 	precancelable_rate_periodic = fields.Float('Tasa periodo cancelado', digits=(16,6))
+	old_precancelable_rate_periodic = fields.Float('Tasa periodo cancelado previo', digits=(16,6))
+	apply_rate = fields.Float('Tasa aplicada', digits=(16,6), compute='_compute_apply_rate')
 
 	currency_id = fields.Many2one('res.currency', string="Moneda", related='fixed_term_id.currency_id', readonly=True)
 	interest_amount = fields.Float('Interes')
@@ -255,8 +394,17 @@ class FixedTermLine(models.Model):
 		self.name = 'Vencimiento #' + str(self.number).zfill(6)
 
 	@api.one
+	def _compute_orgin_days(self):
+		date = datetime.strptime(str(self.date), "%Y-%m-%d")
+		origin_date_maturity = datetime.strptime(self.origin_date_maturity, "%Y-%m-%d")
+		if origin_date_maturity > date:
+			count_days = origin_date_maturity - date
+			self.origin_days = count_days.days
+		else:
+			self.origin_days = 0
+
+	@api.one
 	def compute_days(self):
-		old_days = self.days
 		date = datetime.strptime(str(self.date), "%Y-%m-%d")
 		date_maturity = datetime.strptime(self.date_maturity, "%Y-%m-%d")
 		if date_maturity > date:
@@ -265,14 +413,16 @@ class FixedTermLine(models.Model):
 		else:
 			self.days = 0
 
-		if old_days == 0:
-			self.percentage_complete_of_time = 1
-		else:
-			self.percentage_complete_of_time = (self.days * self.percentage_complete_of_time) / old_days
+	@api.one
+	def _compute_percentage_complete(self):
+		self.percentage_complete_of_time = round((float(self.days) / float(self.origin_days)), 2)
 
 	@api.one
 	def compute_interest_amount(self):
-		self.interest_amount = round(self.amount * self.rate_periodic, 2)
+		rate = self.rate_periodic
+		if self.percentage_complete_of_time < 1:
+			rate = self.precancelable_rate_periodic
+		self.interest_amount = round(self.amount * rate * self.percentage_complete_of_time, 2)
 		if self.vat_tax and self.vat_tax_included:
 			self.interest_amount = round(self.interest_amount / (1 + self.vat_tax_id.amount / 100), 2)
 
@@ -289,6 +439,19 @@ class FixedTermLine(models.Model):
 		self.total_amount = self.interest_amount + self.vat_tax_amount
 
 	@api.one
+	def save_state(self):
+		self.old_date_maturity = self.date_maturity
+		self.old_rate_periodic = self.rate_periodic
+		self.old_precancelable_rate_periodic = self.precancelable_rate_periodic
+
+	@api.one
+	def _compute_apply_rate(self):
+		if self.percentage_complete_of_time == 1:
+			self.apply_rate = self.rate_periodic
+		else:
+			self.apply_rate = self.precancelable_rate_periodic * self.percentage_complete_of_time
+
+	@api.one
 	def compute_line(self):
 		# Compute days count
 		self.compute_days()
@@ -300,7 +463,7 @@ class FixedTermLine(models.Model):
 		self.compute_total_amount()
 
 	@api.multi
-	def action_confirm(self):
+	def action_update(self):
 		params = {
 			'fixed_term_line_id': self.id,
 			'date': self.date,
@@ -326,67 +489,46 @@ class FixedTermLine(models.Model):
 			'target': 'new',
 		}
 
-	@api.multi
+	@api.one
 	def action_validate(self):
-		configuracion_id = self.env['fixed.term.config'].browse(1)
-		default_journal_id = None
-		if len(configuracion_id) > 0:
-			invoice_journal_id = configuracion_id.invoice_journal_id
-		params = {
-			'fixed_term_line_id': self.id,
-			'invoice_journal_id': invoice_journal_id.id,
-		}
-		view_id = self.env['fixed.term.line.validate.wizard']
-		new = view_id.create(params)
-		return {
-			'type': 'ir.actions.act_window',
-			'name': 'Validar',
-			'res_model': 'fixed.term.line.validate.wizard',
-			'view_type': 'form',
-			'view_mode': 'form',
-			'res_id': new.id,
-			'view_id': self.env.ref('fixed_term.fixed_term_validate_wizard', False).id,
-			'target': 'new',
-		}
+		if self.compound_interest:
+			self.state = 'finalizado'
+		else:
+			if self.interest_amount > 0:
+				self.state = 'por_facturar'
+				self.sub_state = 'por_facturar'
+			else:
+				self.state = 'finalizado'
+		
+		if len(self.next_fixed_term_line_id) > 0:
+			if self.percentage_complete_of_time == 1:
+				self.next_fixed_term_line_id.state = 'activo'
+			else:
+				self.next_fixed_term_line_id.action_cancel()
+
+	@api.one
+	def action_undo(self):
+		self.date_maturity = self.old_date_maturity
+		self.rate_periodic = self.old_rate_periodic
+		self.precancelable_rate_periodic = self.old_precancelable_rate_periodic
+		self.compute_line()
+		self.state = 'activo'
+
 
 	@api.one
 	def action_cancel(self):
-		print "CANCELLLLLLLLLL"
-		if self.compound_interest:
-			if self.prev_fixed_term_line_id.state == 'finalizado':
-				self.generate_invoice()
 		self.state = 'cancelado'
+		self.interest_amount = 0
+		self.vat_tax_amount = 0
+		self.total_amount = 0
 		self.next_fixed_term_line_id.action_cancel()
 
 	@api.one
-	@api.depends('invoice_id.state')
-	def compute_change_state(self):
-		if self.invoice_id.state == 'open' and self.state == 'por_facturar':
-			self.state = 'finalizado'
-			self.next_fixed_term_line_id.state = 'activo'
-
-	@api.multi
-	def validate_fixed_term_line(self):
-		self.ensure_one()
-		if self.compound_interest:
-			self.state = 'finalizado'
-			self.next_fixed_term_line_id.state = 'activo'
-			#if es el ultimo => facturar.
-		else:
-			self.generate_invoice()
-			if self.invoice_id.state == 'draft':
-				self.state = 'por_facturar'
-				self.sub_state = 'por_facturar'
-			elif self.invoice_id.state == 'open':
-				self.state = 'finalizado'
-				self.next_fixed_term_line_id.state = 'activo'
-
-
-	@api.one
-	def generate_invoice(self):
+	def generate_invoice(self, amount):
 		currency_id = self.env.user.company_id.currency_id.id
 		configuracion_id = self.env['fixed.term.config'].browse(1)
 		automatic_validate = configuracion_id.automatic_validate
+		self.journal_id = self.fixed_term_id.invoice_journal_id.id
 		# Create invoice line
 		ail_ids = []
 		vat_tax_id = False
@@ -396,26 +538,18 @@ class FixedTermLine(models.Model):
 		if self.vat_tax:
 			vat_tax_id = self.vat_tax_id.id
 			invoice_line_tax_ids = [(6, 0, [vat_tax_id])]
-		price_unit = 0
-		if self.compound_interest:
-			for line_id in self.fixed_term_id.line_ids:
-				if line_id.state == 'finalizado':
-					price_unit += line_id.total_amount
-		else:
-			price_unit = self.total_amount
-		if self.interest_amount > 0:
+
+		if amount > 0:
 			ail = {
 				'name': "Intereses pagados - Plazo Fijo",
 				'quantity':1,
-				'price_unit': price_unit,
+				'price_unit': amount,
 				'vat_tax_id': vat_tax_id,
 				'invoice_line_tax_ids': invoice_line_tax_ids,
 				'report_invoice_line_tax_ids': invoice_line_tax_ids,
 				'account_id': self.journal_id.default_debit_account_id.id,
 			}
 			ail_ids.append((0,0,ail))
-			print ail
-			print ail_ids
 
 		if len(ail_ids) > 0:
 			ai_values = {
@@ -431,10 +565,8 @@ class FixedTermLine(models.Model):
 			}
 			new_invoice_id = self.env['account.invoice'].create(ai_values)
 			if automatic_validate:
-				if self.document_number:
-					if len(self.partner_id.afip_responsability_type_id) <= 0:
-						raise ValidationError("Tipo de responsabilidad AFIP no definida en el Proveedor.")
-				new_invoice_id.signal_workflow('invoice_open')
+				if not self.journal_id.use_documents:
+					new_invoice_id.signal_workflow('invoice_open')
 			self.invoice_id = new_invoice_id.id
 
 class FixedTermConfig(models.Model):

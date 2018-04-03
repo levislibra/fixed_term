@@ -26,6 +26,7 @@
           <header>
             <button name="compute_lines" class="oe_highlight" string="Generar Plazo Fijo" states="borrador" type="object" />
             <button name="action_fixed_term_confirm" class="oe_highlight" string="Confirmar Plazo Fijo" states="borrador" type="object" />
+            <button name="action_fixed_term_finalized" class="oe_highlight" string="Finalizar" states="activo" type="object" />
             <field name="state" widget="statusbar"/>
           </header>
           <sheet>
@@ -56,6 +57,7 @@
             </group>
             <notebook>
               <page string="Vencimientos">
+                <button name="action_invoice_generate" class="oe_highlight" string="Facturar" states="activo" type="object"/>
                 <field name="line_ids" attrs="{'readonly': [('state', 'in', ('finalizado', 'cancelado'))]}">
                   <tree editable="1">
                     <field name="date" attrs="{'readonly': [('state', 'in', ('finalizado', 'cancelado'))]}"/>
@@ -64,19 +66,22 @@
                     <field name="days" sum="Total"  attrs="{'readonly': [('state', 'in', ('finalizado', 'cancelado'))]}"/>
                     <field name="percentage_complete_of_time" attrs="{'readonly': [('state', 'in', ('finalizado', 'cancelado'))]}"/>
                     <field name="unit_of_time" attrs="{'readonly': [('state', 'in', ('finalizado', 'cancelado'))]}"/>
-                    <field name="rate_periodic" attrs="{'readonly': [('state', 'in', ('finalizado', 'cancelado'))]}"/>
-                    <field name="precancelable_rate_periodic" attrs="{'readonly': [('state', 'in', ('finalizado', 'cancelado'))], 'invisible': [('sub_state', '!=', 'precancelado')]}"/>
+                    <field name="rate_periodic" attrs="{'readonly': [('state', 'in', ('finalizado', 'cancelado'))]}" invisible="1"/>
+                    <field name="precancelable_rate_periodic" attrs="{'readonly': [('state', 'in', ('finalizado', 'cancelado'))]}" invisible="1"/>
+                    <field name="apply_rate" invisible="0"/>
                     <field name="currency_id" invisible="1"/>
                     <field name="interest_amount" options="{'currency_field': 'currency_id'}" widget="monetary"  sum="Total"/>
+                    <field name="origin_days" invisible="1"/>
                     <field name="vat_tax" invisible="1"/>
                     <field name="vat_tax_id" attrs="{'invisible': [('vat_tax', '=', False)]}"/>
                     <field name="vat_tax_amount" attrs="{'invisible': [('vat_tax', '=', False)]}" options="{'currency_field': 'currency_id'}" widget="monetary"  sum="Total"/>
                     <field name="total_amount" options="{'currency_field': 'currency_id'}" widget="monetary"  sum="Total"/>
-                    <button name="action_validate" class="oe_highlight" string="Validar" states="activo,por_facturar" type="object"/>
-                    <button name="action_confirm" class="oe_highlight" string="Actualizar" states="activo" type="object"/>
+                    <button name="action_validate" class="oe_highlight" string="Validar" states="activo,precancelado" type="object"/>
+                    <button name="action_undo" string="Deshacer" states="precancelado" type="object"/>
+                    <button name="action_update" class="oe_highlight" string="Actualizar" states="activo" type="object"/>
                     <button name="action_cancel" string="Cancelar" states="activo" type="object" />
                     <field name="state"/>
-                    <field name="sub_state" attrs="{'invisible': [('state', 'in', ('borrador', 'activo', 'pendiente', 'por_facturar', 'precancelado'))]}"/>
+                    <field name="sub_state" invisible="1"/>
                     <field name="invoice_id" invisible="0"/>
                   </tree>
                 </field>
@@ -120,7 +125,6 @@
           <field name="rate_periodic" attrs="{'readonly': [('state', 'in', ('finalizado', 'cancelado'))]}"/>
           <field name="precancelable_rate_periodic" attrs="{'readonly': [('state', 'in', ('finalizado', 'cancelado'))]}"/>
           <field name="interest_amount" sum="Total"/>
-          <button name="action_confirm" class="oe_highlight" string="Actualizar" states="borrador,activo" type="object"/>
           <field name="state"/>
           <field name="invoice_id"/>
         </tree>

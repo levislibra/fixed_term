@@ -6,6 +6,36 @@ from dateutil import relativedelta
 from openerp.exceptions import UserError, ValidationError
 import time
 
+class FixedTermConfirmWizard(models.TransientModel):
+    _name = 'fixed.term.wizard'
+
+    fixed_term_id = fields.Many2one('fixed.term', string='Plazo Fijo')
+    journal_id = fields.Many2one('account.journal', string='Diario de Plazo Fijo')
+
+    invoice_journal_id = fields.Many2one('account.journal', string='Diario de factura')
+    use_documents = fields.Boolean('Usa Documento', related='invoice_journal_id.use_documents', readonly=True)
+
+    finalized_date = fields.Date('Fecha', default=lambda *a: time.strftime('%Y-%m-%d'))
+
+    @api.one
+    def confirm_fixed_term(self):
+        fixed_term_id = self.fixed_term_id
+        fixed_term_id.journal_id = self.journal_id
+        fixed_term_id.confirm_fixed_term()
+
+    @api.one
+    def invoice_fixed_term(self):
+        fixed_term_id = self.fixed_term_id
+        fixed_term_id.invoice_journal_id = self.invoice_journal_id
+        #fixed_term_id.document_number = self.document_number
+        fixed_term_id.invoice_generate()
+
+    @api.one
+    def finalized_fixed_term(self):
+        fixed_term_id = self.fixed_term_id
+        fixed_term_id.finalized_date = self.finalized_date
+        fixed_term_id.finalized_fixed_term()
+
 class FixedTermLineWizard(models.TransientModel):
     _name = 'fixed.term.line.wizard'
 
@@ -28,35 +58,10 @@ class FixedTermLineWizard(models.TransientModel):
             if self.new_date_maturity <= self.date or self.new_date_maturity >= self.date_maturity:
                 raise ValidationError('La nueva fecha debe ser mayor a la fecha de inicio y menor a la fecha de vencimiento.')
         fixed_term_line_id = self.fixed_term_line_id
+        fixed_term_line_id.save_state()
         fixed_term_line_id.amount = self.amount
         fixed_term_line_id.date_maturity = self.new_date_maturity
         fixed_term_line_id.rate_periodic = self.rate_periodic
         fixed_term_line_id.precancelable_rate_periodic = self.precancelable_rate_periodic
         fixed_term_line_id.compute_line()
-
-class FixedTermConfirmWizard(models.TransientModel):
-    _name = 'fixed.term.confirm.wizard'
-
-    fixed_term_id = fields.Many2one('fixed.term', string='Plazo Fijo')
-    journal_id = fields.Many2one('account.journal', string='Diario de Plazo Fijo')
-
-    @api.one
-    def confirm_fixed_term(self):
-        fixed_term_id = self.fixed_term_id
-        fixed_term_id.journal_id = self.journal_id
-        fixed_term_id.confirm_fixed_term()
- 
-class FixedTermLineValidateWizard(models.TransientModel):
-    _name = 'fixed.term.line.validate.wizard'
-
-    fixed_term_line_id = fields.Many2one('fixed.term.line', string='Plazo Fijo')
-    invoice_journal_id = fields.Many2one('account.journal', string='Diario de factura')
-    use_documents = fields.Boolean('Usa Documento', related='invoice_journal_id.use_documents', readonly=True)
-    document_number = fields.Char('Numero de documento')
-
-    @api.one
-    def validate_fixed_term_line(self):
-        fixed_term_line_id = self.fixed_term_line_id
-        fixed_term_line_id.journal_id = self.invoice_journal_id
-        fixed_term_line_id.document_number = self.document_number
-        fixed_term_line_id.validate_fixed_term_line()
+        fixed_term_line_id.state = 'precancelado'
