@@ -48,9 +48,9 @@
         <field name="name">Finalizar Plazo Fijo</field>
         <field name="model">fixed.term.wizard</field>
         <field name="arch" type="xml">
-            <header>
+            <!--<header>
                 <span>Al finalizar un Plazo Fijo, estara acreditando el dinero a la cuenta originaria del mismo.</span>
-            </header>
+            </header>-->
             <form>
                 <group>
                     <group>
