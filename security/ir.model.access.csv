@@ -1,2 +1,4 @@
 id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
-access_fixed_term_fixed_term,fixed_term.fixed_term,model_fixed_term_fixed_term,,1,0,0,0
+user_fixed_term,fixed.term,model_fixed_term,fixed_term.user,1,1,1,1
+user_fixed_term_line,fixed.term.line,model_fixed_term_line,fixed_term.user,1,1,1,1
+user_fixed_term_config,fixed.term.config,model_fixed_term_config,fixed_term.user,1,1,1,1

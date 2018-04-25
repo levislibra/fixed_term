@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<openerp>
+  <data>
+
+	<record model="ir.module.category" id="financiera_fixed_term_management">
+	  <field name="name">Administracion de Plazos Fijos</field>
+	  <field name="description">Nivel de acceso</field>
+	  <field name="sequence">6</field>
+	</record>
+
+	<record id="user" model="res.groups">
+     <field name="name">Usuario</field>
+     <field name="category_id" ref="financiera_fixed_term_management"/>
+    </record>
+
+</data>
+</openerp>

@@ -179,7 +179,7 @@
       <field name="view_id" ref="fixed_term_line_list"/>
     </record>
     <!-- Top menu item -->
-    <menuitem name="Plazos Fijos" web_icon="fixed_term,static/description/icon.png"  id="fixedterm"/>
+    <menuitem name="Plazos Fijos" web_icon="fixed_term,static/description/icon.png" groups="fixed_term.user" id="fixedterm"/>
 
     <!-- menu categories -->
     <menuitem name="Plazos Fijos" id="fixed_term_list_menu" parent="fixedterm"/>
