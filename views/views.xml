@@ -35,9 +35,9 @@
                 <field name="id"/>
                 <field name="date" attrs="{'readonly': [('state', '!=', 'borrador')]}"/>
                 <field name="partner_id" options="{'no_quick_create':True,'no_create_edit':True}" domain="[('supplier', '=', True)]" attrs="{'readonly': [('state', '!=', 'borrador')]}"/>
-                <field name="property_account_receivable_id" invisible="1"/>
+                <!-- <field name="property_account_receivable_id" invisible="1"/> -->
                 <field name="property_account_payable_id" invisible="1"/>
-                <field name="account_id" options="{'no_quick_create': True,'no_create_edit': True}" domain="['|', ('id', '=', property_account_receivable_id), ('id', '=', property_account_payable_id)]" attrs="{'readonly': [('state', '!=', 'borrador')]}"/>
+                <field name="account_id" options="{'no_quick_create': True,'no_create_edit': True}" domain="[('id', '=', property_account_payable_id)]" attrs="{'readonly': [('state', '!=', 'borrador')]}"/>
                 <field name="amount_balance_account" readonly="1"/>
                 <field name="currency_id" domain="[('active', '=', True)]" options="{'no_quick_create': True,'no_create_edit': True}" attrs="{'readonly': [('state', '!=', 'borrador')]}"/>
                 <field name="amount" attrs="{'readonly': [('state', '!=', 'borrador')]}"/>

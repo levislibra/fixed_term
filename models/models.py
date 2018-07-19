@@ -11,11 +11,11 @@ class FixedTerm(models.Model):
 	_name = 'fixed.term'
 
 	_order = 'id desc'
-	name = fields.Char('Nombre', compute='_compute_name')
+	name = fields.Char('Nombre')
 	date = fields.Date('Fecha', required=True, default=lambda *a: time.strftime('%Y-%m-%d'))
 	partner_id = fields.Many2one('res.partner', 'Proveedor', required=True)
 	account_id = fields.Many2one('account.account', 'Cuenta', required=True)
-	property_account_receivable_id = fields.Integer('Default debit id', copute='_compute_receivable')
+	property_account_receivable_id = fields.Integer('Default debit id', compute='_compute_receivable')
 	property_account_payable_id = fields.Integer('Default Credit id', compute='_compute_payable')
 	amount_balance_account = fields.Float('Balance', compute='_compute_balance')
 	currency_id = fields.Many2one('res.currency', string="Moneda")
@@ -51,13 +51,17 @@ class FixedTerm(models.Model):
 	@api.onchange('partner_id', 'account_id')
 	def _compute_currency_id(self):
 		if len(self.account_id.currency_id) > 0:
-			self.currency_id = self.account_id.currency_id
+			self.currency_id = self.account_id.currency_id.id
 		else:
 			self.currency_id = self.env.user.company_id.currency_id.id
 
-	@api.one
-	def _compute_name(self):
-		self.name = 'Plazo Fijo #' + str(self.id).zfill(6)
+	@api.model
+	def create(self, values):
+		rec = super(FixedTerm, self).create(values)
+		rec.update({
+			'name': 'Plazo Fijo #' + str(rec.id).zfill(6),
+			})
+		return rec
 
 	@api.one
 	@api.onchange('partner_id')
@@ -156,7 +160,7 @@ class FixedTerm(models.Model):
 			#Creamos asiento retirando el dinero de la cuenta del proveedor
 			#y la acreditamos en la cuenta del diario seleccionado
 			aml = {
-			    'name': "Debito a Plazo Fijo",
+			    'name': self.name + " - Debito",
 			    'partner_id': self.partner_id.id,
 			    'account_id': self.account_id.id,
 			    'journal_id': self.journal_id.id,
@@ -166,7 +170,7 @@ class FixedTerm(models.Model):
 			}
 
 			aml2 = {
-			    'name': "Credito por Plazo Fijo",
+			    'name': self.name +  " - Credito",
 			    'account_id': self.journal_id.default_debit_account_id.id,
 			    'journal_id': self.journal_id.id,
 			    'date': self.date,
@@ -178,7 +182,7 @@ class FixedTerm(models.Model):
 			    'journal_id': self.journal_id.id,
 			    'partner_id': self.partner_id.id,
 			    'state': 'draft',
-			    'name': 'PLAZO-FIJO-GENERADO/'+str(self.id).zfill(5),
+			    #'name': 'PLAZO-FIJO-GENERADO/'+str(self.id).zfill(5),
 			    'date': self.date,
 			    'line_ids': [(0, 0, aml), (0, 0, aml2)],
 			}
@@ -240,7 +244,7 @@ class FixedTerm(models.Model):
 	def finalized_fixed_term(self):
 			#Creamos asiento retornando el dinero de la cuenta del proveedor
 			aml = {
-			    'name': "Credito por finalizacion de Plazo Fijo",
+			    'name': self.name +  " - Credito por finalizacion",
 			    'partner_id': self.partner_id.id,
 			    'account_id': self.account_id.id,
 			    'journal_id': self.journal_id.id,
@@ -250,7 +254,7 @@ class FixedTerm(models.Model):
 			}
 
 			aml2 = {
-			    'name': "Debito por finalizacion de Plazo Fijo",
+			    'name': self.name + " - Debito por finalizacion",
 			    'account_id': self.journal_id.default_debit_account_id.id,
 			    'journal_id': self.journal_id.id,
 			    'date': self.finalized_date,
@@ -262,7 +266,7 @@ class FixedTerm(models.Model):
 			    'journal_id': self.journal_id.id,
 			    'partner_id': self.partner_id.id,
 			    'state': 'draft',
-			    'name': 'PLAZO-FIJO-FiNALIZADO/'+str(self.id).zfill(5),
+			    #'name': 'PLAZO-FIJO-FiNALIZADO/'+str(self.id).zfill(5),
 			    'date': self.finalized_date,
 			    'line_ids': [(0, 0, aml), (0, 0, aml2)],
 			}
@@ -541,7 +545,7 @@ class FixedTermLine(models.Model):
 
 		if amount > 0:
 			ail = {
-				'name': "Intereses pagados - Plazo Fijo",
+				'name': "Intereses - Plazo Fijo",
 				'quantity':1,
 				'price_unit': amount,
 				'vat_tax_id': vat_tax_id,
@@ -554,12 +558,13 @@ class FixedTermLine(models.Model):
 		if len(ail_ids) > 0:
 			ai_values = {
 				'type': 'in_invoice',
+				'description_financiera': self.fixed_term_id.name + " - " + self.name,
 			    'account_id': self.fixed_term_id.account_id.id,
 			    'partner_id': self.partner_id.id,
 			    'journal_id': self.journal_id.id,
 			    'currency_id': currency_id,
 			    'company_id': 1,
-			    'date': self.date,
+			    'date': self.date_maturity,
 			    'document_number': self.document_number,
 			    'invoice_line_ids': ail_ids,
 			}
